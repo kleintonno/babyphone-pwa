@@ -1,17 +1,14 @@
 import { setState } from './state.js';
 
 type MessageHandler = (msg: Record<string, unknown>) => void;
-type ReconnectHandler = () => void;
 
 let ws: WebSocket | null = null;
+let wsId = 0; // monotonic ID to detect stale close events
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let messageHandlers: Set<MessageHandler> = new Set();
-let reconnectHandlers: Set<ReconnectHandler> = new Set();
 let autoReconnect = true;
 
 function getServerUrl(): string {
-  // In production, connect to same host
-  // In development, connect to local server
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const host = import.meta.env.DEV ? 'localhost:3000' : location.host;
   return `${protocol}//${host}/ws`;
@@ -26,9 +23,14 @@ export function connect(): void {
   const url = getServerUrl();
   console.log('[WS] Connecting to', url);
 
-  ws = new WebSocket(url);
+  const currentId = ++wsId;
+  const socket = new WebSocket(url);
+  ws = socket;
 
-  ws.onopen = () => {
+  socket.onopen = () => {
+    // Ignore if this socket was superseded
+    if (wsId !== currentId) return;
+
     console.log('[WS] Connected');
     setState({ connected: true, error: null });
 
@@ -36,14 +38,11 @@ export function connect(): void {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
     }
-
-    // Notify reconnect handlers (they can re-create/re-join rooms)
-    for (const handler of reconnectHandlers) {
-      handler();
-    }
   };
 
-  ws.onmessage = (event) => {
+  socket.onmessage = (event) => {
+    if (wsId !== currentId) return;
+
     try {
       const msg = JSON.parse(event.data as string) as Record<string, unknown>;
       for (const handler of messageHandlers) {
@@ -54,7 +53,10 @@ export function connect(): void {
     }
   };
 
-  ws.onclose = () => {
+  socket.onclose = () => {
+    // Ignore close events from old/superseded sockets
+    if (wsId !== currentId) return;
+
     console.log('[WS] Disconnected');
     setState({ connected: false });
     ws = null;
@@ -63,7 +65,8 @@ export function connect(): void {
     }
   };
 
-  ws.onerror = (err) => {
+  socket.onerror = (err) => {
+    if (wsId !== currentId) return;
     console.error('[WS] Error:', err);
     setState({ error: 'Verbindung zum Server fehlgeschlagen' });
   };
@@ -80,6 +83,7 @@ function scheduleReconnect(): void {
 
 export function disconnect(): void {
   autoReconnect = false;
+  wsId++; // invalidate any pending socket events
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
@@ -93,15 +97,6 @@ export function disconnect(): void {
 
 export function isConnected(): boolean {
   return ws !== null && ws.readyState === WebSocket.OPEN;
-}
-
-/**
- * Register a handler that is called after every successful (re)connection.
- * Returns a cleanup function.
- */
-export function onReconnect(handler: ReconnectHandler): () => void {
-  reconnectHandlers.add(handler);
-  return () => reconnectHandlers.delete(handler);
 }
 
 export function send(data: Record<string, unknown>): void {
