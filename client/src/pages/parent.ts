@@ -1,6 +1,7 @@
 import { getState, setState, subscribe } from '../lib/state.js';
 import { onMessage } from '../lib/signaling.js';
 import { initWebRTC } from '../lib/webrtc.js';
+import { setNoiseAlertHandler, getLanPeerConnection } from '../lib/lan-pairing.js';
 
 let unsubscribeState: (() => void) | null = null;
 let unsubscribeMsg: (() => void) | null = null;
@@ -66,9 +67,16 @@ export function renderParent(container: HTMLElement): void {
   setupMessageHandler();
 
   // Init WebRTC for receiving audio
-  if (!unsubscribeWebRTC) {
+  // Init WebRTC for receiving audio (server mode)
+  // In LAN mode, the connection is already established via DataChannel
+  if (!getLanPeerConnection() && !unsubscribeWebRTC) {
     unsubscribeWebRTC = initWebRTC();
   }
+
+  // LAN mode: listen for noise alerts via DataChannel
+  setNoiseAlertHandler(() => {
+    handleNoiseAlert(new Date().toISOString());
+  });
 }
 
 function setupEventListeners(): void {

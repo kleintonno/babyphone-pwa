@@ -1,5 +1,6 @@
 import { getState, setState } from './state.js';
 import { send } from './signaling.js';
+import { sendLanNoiseAlert, getLanPeerConnection } from './lan-pairing.js';
 
 let audioContext: AudioContext | null = null;
 let mediaStream: MediaStream | null = null;
@@ -106,7 +107,13 @@ function processAudioLevel(rms: number): void {
 function triggerNoiseAlert(): void {
   console.log('[Audio] Noise detected! Sending alert...');
   setState({ noiseDetected: true });
-  send({ type: 'noise-detected' });
+
+  // Send via server (WebSocket) or LAN (DataChannel)
+  if (getLanPeerConnection()) {
+    sendLanNoiseAlert();
+  } else {
+    send({ type: 'noise-detected' });
+  }
 }
 
 export function getMediaStream(): MediaStream | null {
