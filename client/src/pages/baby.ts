@@ -1,5 +1,5 @@
 import { getState, setState, subscribe } from '../lib/state.js';
-import { startMonitoring, stopMonitoring, setThreshold } from '../lib/audio-monitor.js';
+import { startMonitoring, stopMonitoring, setThreshold, setHoldTime } from '../lib/audio-monitor.js';
 import { initWebRTC, startStream } from '../lib/webrtc.js';
 import { onMessage } from '../lib/signaling.js';
 
@@ -48,15 +48,32 @@ export function renderBaby(container: HTMLElement): void {
           <input
             type="range"
             id="threshold-slider"
-            min="0.02"
+            min="0.005"
             max="0.5"
-            step="0.01"
+            step="0.005"
             value="${state.noiseThreshold}"
           />
           <div class="threshold-labels">
             <span>Hoch</span>
             <span>Niedrig</span>
           </div>
+        </div>
+
+        <div class="threshold-control">
+          <label for="hold-slider">Verzoegerung: <span id="hold-value">${(state.noiseHoldMs / 1000).toFixed(1)}s</span></label>
+          <input
+            type="range"
+            id="hold-slider"
+            min="0"
+            max="5000"
+            step="100"
+            value="${state.noiseHoldMs}"
+          />
+          <div class="threshold-labels">
+            <span>Sofort</span>
+            <span>5s</span>
+          </div>
+        </div>
         </div>
 
         <button class="btn primary large" id="btn-monitor">
@@ -80,6 +97,8 @@ export function renderBaby(container: HTMLElement): void {
 function setupEventListeners(): void {
   const monitorBtn = document.getElementById('btn-monitor')!;
   const thresholdSlider = document.getElementById('threshold-slider') as HTMLInputElement;
+  const holdSlider = document.getElementById('hold-slider') as HTMLInputElement;
+  const holdValue = document.getElementById('hold-value')!;
   const disconnectBtn = document.getElementById('btn-disconnect')!;
 
   monitorBtn.addEventListener('click', async () => {
@@ -101,6 +120,12 @@ function setupEventListeners(): void {
     const value = parseFloat(thresholdSlider.value);
     setThreshold(value);
     updateThresholdLine(value);
+  });
+
+  holdSlider.addEventListener('input', () => {
+    const ms = parseInt(holdSlider.value, 10);
+    setHoldTime(ms);
+    holdValue.textContent = ms === 0 ? 'Sofort' : `${(ms / 1000).toFixed(1)}s`;
   });
 
   disconnectBtn.addEventListener('click', () => {
@@ -137,12 +162,24 @@ function setupMessageHandler(): void {
   });
 }
 
+// Convert linear RMS (0..~1) to a visual percentage using a log-like curve.
+// This makes quiet sounds much more visible on the meter.
+function toVisualPercent(value: number): number {
+  if (value <= 0) return 0;
+  // Map to dB-like scale: 0.001 → ~0%, 0.5 → 100%
+  const minDb = -60; // ~ 0.001
+  const maxDb = -6;  // ~ 0.5
+  const db = 20 * Math.log10(Math.max(value, 0.001));
+  const percent = ((db - minDb) / (maxDb - minDb)) * 100;
+  return Math.max(0, Math.min(100, percent));
+}
+
 function startAnimationLoop(): void {
   function update(): void {
     const state = getState();
     const levelBar = document.getElementById('level-bar');
     if (levelBar) {
-      const percent = Math.min(state.noiseLevel / 0.5, 1) * 100;
+      const percent = toVisualPercent(state.noiseLevel);
       levelBar.style.height = `${percent}%`;
 
       // Color based on threshold
@@ -164,7 +201,7 @@ function updateLevelMeter(_level: number, _threshold: number): void {
 function updateThresholdLine(threshold: number): void {
   const line = document.getElementById('threshold-line');
   if (line) {
-    const percent = Math.min(threshold / 0.5, 1) * 100;
+    const percent = toVisualPercent(threshold);
     line.style.bottom = `${percent}%`;
   }
 }

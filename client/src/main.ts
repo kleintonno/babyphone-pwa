@@ -41,9 +41,10 @@ subscribe((state) => {
 async function init(): Promise<void> {
   // Load persisted state
   const persisted = loadPersistedState();
-  if (persisted.noiseThreshold) {
-    setState({ noiseThreshold: persisted.noiseThreshold });
-  }
+  const restored: Partial<typeof persisted> = {};
+  if (persisted.noiseThreshold) restored.noiseThreshold = persisted.noiseThreshold;
+  if (persisted.noiseHoldMs) restored.noiseHoldMs = persisted.noiseHoldMs;
+  if (Object.keys(restored).length) setState(restored);
 
   // Register service worker
   if ('serviceWorker' in navigator) {

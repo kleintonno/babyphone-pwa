@@ -5,6 +5,10 @@ import { sendLanNoiseAlert, getLanPeerConnection } from './lan-pairing.js';
 let audioContext: AudioContext | null = null;
 let mediaStream: MediaStream | null = null;
 let workletNode: AudioWorkletNode | null = null;
+let gainNode: GainNode | null = null;
+
+// Microphone gain multiplier (amplifies quiet signals)
+const MIC_GAIN = 4.0;
 
 // Exponential Moving Average for smoothing
 let ema = 0;
@@ -12,7 +16,6 @@ const EMA_ALPHA = 0.3;
 
 // Noise detection state
 let noiseStartTime: number | null = null;
-const NOISE_HOLD_MS = 2000; // Must be above threshold for 2 seconds
 let cooldownUntil = 0;
 const COOLDOWN_MS = 30_000; // 30s cooldown between alerts
 
@@ -34,6 +37,11 @@ export async function startMonitoring(): Promise<void> {
     await audioContext.audioWorklet.addModule('/workers/audio-processor.js');
 
     const source = audioContext.createMediaStreamSource(mediaStream);
+
+    // Amplify the microphone signal for better sensitivity
+    gainNode = audioContext.createGain();
+    gainNode.gain.value = MIC_GAIN;
+
     workletNode = new AudioWorkletNode(audioContext, 'audio-level-processor');
 
     workletNode.port.onmessage = (event: MessageEvent) => {
@@ -41,7 +49,8 @@ export async function startMonitoring(): Promise<void> {
       processAudioLevel(rms);
     };
 
-    source.connect(workletNode);
+    source.connect(gainNode);
+    gainNode.connect(workletNode);
     // Don't connect to destination - we don't want to play the audio on the baby device
     // workletNode.connect(audioContext.destination);
 
@@ -59,6 +68,10 @@ export function stopMonitoring(): void {
   if (workletNode) {
     workletNode.disconnect();
     workletNode = null;
+  }
+  if (gainNode) {
+    gainNode.disconnect();
+    gainNode = null;
   }
   if (audioContext) {
     audioContext.close();
@@ -81,6 +94,7 @@ function processAudioLevel(rms: number): void {
 
   const state = getState();
   const threshold = state.noiseThreshold;
+  const holdMs = state.noiseHoldMs;
   const now = Date.now();
 
   setState({ noiseLevel: ema });
@@ -88,7 +102,7 @@ function processAudioLevel(rms: number): void {
   if (ema > threshold) {
     if (noiseStartTime === null) {
       noiseStartTime = now;
-    } else if (now - noiseStartTime >= NOISE_HOLD_MS) {
+    } else if (now - noiseStartTime >= holdMs) {
       // Noise sustained above threshold for required duration
       if (now > cooldownUntil) {
         triggerNoiseAlert();
@@ -122,4 +136,8 @@ export function getMediaStream(): MediaStream | null {
 
 export function setThreshold(value: number): void {
   setState({ noiseThreshold: value });
+}
+
+export function setHoldTime(ms: number): void {
+  setState({ noiseHoldMs: ms });
 }

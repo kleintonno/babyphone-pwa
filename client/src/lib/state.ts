@@ -11,6 +11,7 @@ export interface AppState {
   monitoring: boolean;
   noiseLevel: number;
   noiseThreshold: number;
+  noiseHoldMs: number;
   noiseDetected: boolean;
   pushEnabled: boolean;
   streamActive: boolean;
@@ -34,7 +35,8 @@ const defaultState: AppState = {
   paired: false,
   monitoring: false,
   noiseLevel: 0,
-  noiseThreshold: 0.15,
+  noiseThreshold: 0.05,
+  noiseHoldMs: 500,
   noiseDetected: false,
   pushEnabled: false,
   streamActive: false,
@@ -81,6 +83,7 @@ function persistState(): void {
     role: state.role,
     roomCode: state.roomCode,
     noiseThreshold: state.noiseThreshold,
+    noiseHoldMs: state.noiseHoldMs,
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
 }
