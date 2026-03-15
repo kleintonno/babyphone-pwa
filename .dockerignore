@@ -1,0 +1,10 @@
+node_modules
+dist
+*.log
+.env
+vapid-keys.json
+.git
+.gitignore
+*.md
+turnserver.conf
+docker-compose.yml
