@@ -19,6 +19,7 @@ export type LanRole = 'baby' | 'parent';
 let peerConnection: RTCPeerConnection | null = null;
 let dataChannel: RTCDataChannel | null = null;
 let onNoiseAlert: (() => void) | null = null;
+let onSettingsUpdate: ((settings: Record<string, unknown>) => void) | null = null;
 
 const ICE_CONFIG: RTCConfiguration = {
   iceServers: [], // No STUN needed in LAN
@@ -155,9 +156,12 @@ function setupDataChannel(dc: RTCDataChannel): void {
 
   dc.onmessage = (event) => {
     try {
-      const msg = JSON.parse(event.data as string) as { type: string };
+      const msg = JSON.parse(event.data as string) as { type: string; [key: string]: unknown };
       if (msg.type === 'noise-alert' && onNoiseAlert) {
         onNoiseAlert();
+      }
+      if (msg.type === 'update-settings' && onSettingsUpdate) {
+        onSettingsUpdate(msg);
       }
     } catch {
       // ignore
@@ -173,6 +177,16 @@ export function sendLanNoiseAlert(): void {
 
 export function setNoiseAlertHandler(handler: () => void): void {
   onNoiseAlert = handler;
+}
+
+export function setSettingsUpdateHandler(handler: (settings: Record<string, unknown>) => void): void {
+  onSettingsUpdate = handler;
+}
+
+export function sendLanSettings(settings: { noiseThreshold?: number; noiseHoldMs?: number }): void {
+  if (dataChannel && dataChannel.readyState === 'open') {
+    dataChannel.send(JSON.stringify({ type: 'update-settings', ...settings }));
+  }
 }
 
 export function addAudioTrackToLan(stream: MediaStream): void {
@@ -262,4 +276,5 @@ export function closeLanConnection(): void {
     peerConnection = null;
   }
   onNoiseAlert = null;
+  onSettingsUpdate = null;
 }

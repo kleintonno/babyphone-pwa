@@ -1,7 +1,7 @@
 import { getState, setState, subscribe } from '../lib/state.js';
-import { onMessage } from '../lib/signaling.js';
+import { onMessage, send } from '../lib/signaling.js';
 import { initWebRTC } from '../lib/webrtc.js';
-import { setNoiseAlertHandler, getLanPeerConnection } from '../lib/lan-pairing.js';
+import { setNoiseAlertHandler, getLanPeerConnection, sendLanSettings } from '../lib/lan-pairing.js';
 
 let unsubscribeState: (() => void) | null = null;
 let unsubscribeMsg: (() => void) | null = null;
@@ -48,6 +48,40 @@ export function renderParent(container: HTMLElement): void {
           <span>${state.streamActive ? 'Audio-Stream aktiv' : 'Kein Audio-Stream'}</span>
         </div>
 
+        <div class="settings-section">
+          <h3>Baby-Einstellungen</h3>
+          <div class="threshold-control">
+            <label for="remote-threshold">Empfindlichkeit</label>
+            <input
+              type="range"
+              id="remote-threshold"
+              min="0.005"
+              max="0.5"
+              step="0.005"
+              value="${state.noiseThreshold}"
+            />
+            <div class="threshold-labels">
+              <span>Hoch</span>
+              <span>Niedrig</span>
+            </div>
+          </div>
+          <div class="threshold-control">
+            <label for="remote-hold">Verzoegerung: <span id="remote-hold-value">${state.noiseHoldMs === 0 ? 'Sofort' : `${(state.noiseHoldMs / 1000).toFixed(1)}s`}</span></label>
+            <input
+              type="range"
+              id="remote-hold"
+              min="0"
+              max="5000"
+              step="100"
+              value="${state.noiseHoldMs}"
+            />
+            <div class="threshold-labels">
+              <span>Sofort</span>
+              <span>5s</span>
+            </div>
+          </div>
+        </div>
+
         <div class="alert-history" id="alert-history">
           <h3>Verlauf</h3>
           <div class="alert-list" id="alert-list">
@@ -84,6 +118,31 @@ function setupEventListeners(): void {
     cleanup();
     setState({ page: 'home', role: null, roomCode: null, paired: false });
   });
+
+  const thresholdSlider = document.getElementById('remote-threshold') as HTMLInputElement;
+  const holdSlider = document.getElementById('remote-hold') as HTMLInputElement;
+  const holdValue = document.getElementById('remote-hold-value')!;
+
+  thresholdSlider.addEventListener('input', () => {
+    const value = parseFloat(thresholdSlider.value);
+    setState({ noiseThreshold: value });
+    sendSettings({ noiseThreshold: value });
+  });
+
+  holdSlider.addEventListener('input', () => {
+    const ms = parseInt(holdSlider.value, 10);
+    setState({ noiseHoldMs: ms });
+    holdValue.textContent = ms === 0 ? 'Sofort' : `${(ms / 1000).toFixed(1)}s`;
+    sendSettings({ noiseHoldMs: ms });
+  });
+}
+
+function sendSettings(settings: { noiseThreshold?: number; noiseHoldMs?: number }): void {
+  if (getLanPeerConnection()) {
+    sendLanSettings(settings);
+  } else {
+    send({ type: 'update-settings', ...settings });
+  }
 }
 
 function setupStateSubscription(): void {

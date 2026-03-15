@@ -71,6 +71,7 @@ export function handleConnection(ws: WebSocket): void {
       case 'offer':
       case 'answer':
       case 'ice-candidate':
+      case 'update-settings':
         handleWebRTCSignaling(ws, msg);
         break;
       case 'get-vapid-key':

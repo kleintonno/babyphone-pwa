@@ -2,6 +2,7 @@ import { getState, setState, subscribe } from '../lib/state.js';
 import { startMonitoring, stopMonitoring, setThreshold, setHoldTime } from '../lib/audio-monitor.js';
 import { initWebRTC, startStream } from '../lib/webrtc.js';
 import { onMessage } from '../lib/signaling.js';
+import { setSettingsUpdateHandler } from '../lib/lan-pairing.js';
 
 let unsubscribeState: (() => void) | null = null;
 let unsubscribeMsg: (() => void) | null = null;
@@ -90,6 +91,11 @@ export function renderBaby(container: HTMLElement): void {
   setupMessageHandler();
   requestWakeLock();
 
+  // LAN mode: listen for remote settings changes via DataChannel
+  setSettingsUpdateHandler((msg) => {
+    applyRemoteSettings(msg);
+  });
+
   // Set initial threshold line position
   updateThresholdLine(state.noiseThreshold);
 }
@@ -159,7 +165,26 @@ function setupMessageHandler(): void {
     if (msg.type === 'peer-disconnected') {
       setState({ paired: false, peerConnected: false });
     }
+    if (msg.type === 'update-settings') {
+      applyRemoteSettings(msg);
+    }
   });
+}
+
+function applyRemoteSettings(msg: Record<string, unknown>): void {
+  if (typeof msg.noiseThreshold === 'number') {
+    setThreshold(msg.noiseThreshold);
+    const slider = document.getElementById('threshold-slider') as HTMLInputElement | null;
+    if (slider) slider.value = String(msg.noiseThreshold);
+    updateThresholdLine(msg.noiseThreshold);
+  }
+  if (typeof msg.noiseHoldMs === 'number') {
+    setHoldTime(msg.noiseHoldMs);
+    const slider = document.getElementById('hold-slider') as HTMLInputElement | null;
+    const label = document.getElementById('hold-value');
+    if (slider) slider.value = String(msg.noiseHoldMs);
+    if (label) label.textContent = msg.noiseHoldMs === 0 ? 'Sofort' : `${(msg.noiseHoldMs / 1000).toFixed(1)}s`;
+  }
 }
 
 // Convert linear RMS (0..~1) to a visual percentage using a log-like curve.
