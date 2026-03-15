@@ -244,7 +244,7 @@ export async function startQRScanner(
 
       // Try native BarcodeDetector first, fallback to jsQR
       const code = jsQR(imageData.data, imageData.width, imageData.height, {
-        inversionAttempts: 'dontInvert',
+        inversionAttempts: 'attemptBoth',
       });
 
       if (code && code.data) {

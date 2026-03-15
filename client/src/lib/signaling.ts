@@ -1,10 +1,13 @@
 import { setState } from './state.js';
 
 type MessageHandler = (msg: Record<string, unknown>) => void;
+type ReconnectHandler = () => void;
 
 let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let messageHandlers: Set<MessageHandler> = new Set();
+let reconnectHandlers: Set<ReconnectHandler> = new Set();
+let autoReconnect = true;
 
 function getServerUrl(): string {
   // In production, connect to same host
@@ -19,6 +22,7 @@ export function connect(): void {
     return;
   }
 
+  autoReconnect = true;
   const url = getServerUrl();
   console.log('[WS] Connecting to', url);
 
@@ -31,6 +35,11 @@ export function connect(): void {
     if (reconnectTimer) {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
+    }
+
+    // Notify reconnect handlers (they can re-create/re-join rooms)
+    for (const handler of reconnectHandlers) {
+      handler();
     }
   };
 
@@ -49,7 +58,9 @@ export function connect(): void {
     console.log('[WS] Disconnected');
     setState({ connected: false });
     ws = null;
-    scheduleReconnect();
+    if (autoReconnect) {
+      scheduleReconnect();
+    }
   };
 
   ws.onerror = (err) => {
@@ -68,6 +79,7 @@ function scheduleReconnect(): void {
 }
 
 export function disconnect(): void {
+  autoReconnect = false;
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
@@ -77,6 +89,19 @@ export function disconnect(): void {
     ws = null;
   }
   setState({ connected: false });
+}
+
+export function isConnected(): boolean {
+  return ws !== null && ws.readyState === WebSocket.OPEN;
+}
+
+/**
+ * Register a handler that is called after every successful (re)connection.
+ * Returns a cleanup function.
+ */
+export function onReconnect(handler: ReconnectHandler): () => void {
+  reconnectHandlers.add(handler);
+  return () => reconnectHandlers.delete(handler);
 }
 
 export function send(data: Record<string, unknown>): void {

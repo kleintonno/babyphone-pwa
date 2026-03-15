@@ -1,6 +1,6 @@
 import QRCode from 'qrcode';
 import { getState, setState } from '../lib/state.js';
-import { connect, createRoom, joinRoom, onMessage, getLocalIp, send } from '../lib/signaling.js';
+import { connect, disconnect, createRoom, joinRoom, onMessage, onReconnect, getLocalIp, send, isConnected } from '../lib/signaling.js';
 import { subscribePush } from '../lib/push.js';
 import { initWebRTC } from '../lib/webrtc.js';
 import {
@@ -13,6 +13,7 @@ import {
 } from '../lib/lan-pairing.js';
 
 let cleanupSignaling: (() => void) | null = null;
+let cleanupReconnect: (() => void) | null = null;
 let cleanupWebRTC: (() => void) | null = null;
 let cleanupScanner: (() => void) | null = null;
 let serverTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -61,6 +62,9 @@ export function renderPair(container: HTMLElement): void {
 // ============ SERVER MODE ============
 
 function tryServerMode(isBaby: boolean): void {
+  // Clean up any stale connection first
+  disconnect();
+
   connect();
 
   // Timeout: if server doesn't connect in time, offer LAN mode
@@ -71,6 +75,21 @@ function tryServerMode(isBaby: boolean): void {
   }, SERVER_TIMEOUT_MS);
 
   setupSignaling(isBaby);
+
+  // Register reconnect handler so rooms are re-created after a WS reconnect
+  if (cleanupReconnect) cleanupReconnect();
+  cleanupReconnect = onReconnect(async () => {
+    // Only re-create/re-join if we're still on the pair page and not in LAN mode
+    const state = getState();
+    if (state.page !== 'pair' || isLanMode) return;
+
+    console.log('[Pair] WebSocket reconnected, re-creating room...');
+    if (isBaby) {
+      const localIp = await getLocalIp();
+      createRoom(localIp);
+    }
+    // For parent, they need to re-enter/re-scan the code, so we don't auto-rejoin
+  });
 
   // Wait for connection
   connectionCheckInterval = setInterval(async () => {
@@ -157,7 +176,7 @@ function setupSignaling(isBaby: boolean): void {
         const code = msg.code as string;
         const memberId = msg.memberId as string;
         setState({ roomCode: code, memberId });
-        showServerBabyUI(code);
+        await showServerBabyUI(code);
         break;
       }
 
@@ -365,6 +384,34 @@ function setupCodeInput(): void {
 
 async function doJoin(code: string): Promise<void> {
   const statusEl = document.getElementById('pair-status');
+
+  // Ensure WebSocket is connected before trying to join
+  if (!isConnected()) {
+    if (statusEl) {
+      statusEl.innerHTML = '<span class="status-error">Nicht mit Server verbunden. Bitte warten...</span>';
+    }
+    // Try to reconnect and retry
+    connect();
+    const retryTimeout = setTimeout(() => {
+      if (statusEl) {
+        statusEl.innerHTML = '<span class="status-error">Verbindung fehlgeschlagen. Bitte nochmal versuchen.</span>';
+      }
+    }, 5000);
+
+    const checkConnected = setInterval(async () => {
+      if (isConnected()) {
+        clearInterval(checkConnected);
+        clearTimeout(retryTimeout);
+        const localIp = await getLocalIp();
+        joinRoom(code, 'parent', localIp);
+        if (statusEl) {
+          statusEl.innerHTML = '<span class="status-connecting"><div class="spinner"></div> Verbinde...</span>';
+        }
+      }
+    }, 200);
+    return;
+  }
+
   if (statusEl) {
     statusEl.innerHTML = '<span class="status-connecting"><div class="spinner"></div> Verbinde...</span>';
   }
@@ -545,6 +592,10 @@ function cleanup(): void {
     cleanupSignaling();
     cleanupSignaling = null;
   }
+  if (cleanupReconnect) {
+    cleanupReconnect();
+    cleanupReconnect = null;
+  }
   if (cleanupWebRTC) {
     cleanupWebRTC();
     cleanupWebRTC = null;
@@ -565,4 +616,6 @@ function cleanup(): void {
     closeLanConnection();
     isLanMode = false;
   }
+  // Stop auto-reconnect when leaving pairing page
+  disconnect();
 }

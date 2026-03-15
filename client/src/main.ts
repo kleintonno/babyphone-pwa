@@ -42,8 +42,8 @@ async function init(): Promise<void> {
   // Load persisted state
   const persisted = loadPersistedState();
   const restored: Partial<typeof persisted> = {};
-  if (persisted.noiseThreshold) restored.noiseThreshold = persisted.noiseThreshold;
-  if (persisted.noiseHoldMs) restored.noiseHoldMs = persisted.noiseHoldMs;
+  if (persisted.noiseThreshold !== undefined) restored.noiseThreshold = persisted.noiseThreshold;
+  if (persisted.noiseHoldMs !== undefined) restored.noiseHoldMs = persisted.noiseHoldMs;
   if (Object.keys(restored).length) setState(restored);
 
   // Register service worker
