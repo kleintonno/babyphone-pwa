@@ -260,10 +260,10 @@ body {
   border: 2px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 700;
   text-align: center;
-  letter-spacing: 12px;
+  letter-spacing: 6px;
   outline: none;
   font-variant-numeric: tabular-nums;
 }
@@ -274,7 +274,7 @@ body {
 
 .pair-code-input input::placeholder {
   color: rgba(255, 255, 255, 0.15);
-  letter-spacing: 12px;
+  letter-spacing: 6px;
 }
 
 .pair-status {
@@ -682,6 +682,11 @@ body {
 .scanner-hint {
   color: var(--text-secondary);
   font-size: 14px;
+  text-align: center;
+}
+
+.manual-code-toggle {
+  margin-top: 16px;
   text-align: center;
 }
 

@@ -1,6 +1,6 @@
 {
-  "name": "BayPhone",
-  "short_name": "BayPhone",
+  "name": "BabyPhone",
+  "short_name": "BabyPhone",
   "description": "Digitales Babyphone - sicher und einfach",
   "start_url": "/",
   "display": "standalone",

@@ -1,3 +1,4 @@
+import QRCode from 'qrcode';
 import { getState, setState } from '../lib/state.js';
 import { connect, createRoom, joinRoom, onMessage, getLocalIp, send } from '../lib/signaling.js';
 import { subscribePush } from '../lib/push.js';
@@ -216,20 +217,41 @@ function setupSignaling(isBaby: boolean): void {
   });
 }
 
-function showServerBabyUI(code: string): void {
+async function showServerBabyUI(code: string): Promise<void> {
   const main = document.getElementById('pair-main');
   const instructions = document.getElementById('pair-instructions');
   if (!main || !instructions) return;
 
-  instructions.textContent = 'Gib diesen Code auf dem Eltern-Geraet ein.';
+  instructions.textContent = 'Scanne diesen QR-Code mit dem Eltern-Geraet.';
 
-  main.innerHTML = `
-    <div class="pair-code-display">
-      <div class="code-digits">
-        ${code.split('').map((d) => `<span class="digit">${d}</span>`).join('')}
+  // Generate QR code from room code
+  try {
+    const qrDataUrl = await QRCode.toDataURL(code, {
+      errorCorrectionLevel: 'M',
+      margin: 2,
+      width: 300,
+      color: {
+        dark: '#e8e8e8',
+        light: '#1a1a2e',
+      },
+    });
+
+    main.innerHTML = `
+      <div class="qr-display">
+        <img src="${qrDataUrl}" alt="Pairing QR Code" class="qr-image" />
       </div>
-    </div>
-  `;
+      <p class="code-hint">Code: ${code}</p>
+    `;
+  } catch {
+    // Fallback: show code as digits if QR generation fails
+    main.innerHTML = `
+      <div class="pair-code-display">
+        <div class="code-digits">
+          ${code.split('').map((d) => `<span class="digit">${d}</span>`).join('')}
+        </div>
+      </div>
+    `;
+  }
 }
 
 function showServerParentUI(): void {
@@ -237,17 +259,77 @@ function showServerParentUI(): void {
   const instructions = document.getElementById('pair-instructions');
   if (!main || !instructions) return;
 
-  instructions.textContent = 'Gib den 6-stelligen Code vom Baby-Geraet ein.';
+  instructions.textContent = 'Scanne den QR-Code vom Baby-Geraet.';
+
+  main.innerHTML = `
+    <div class="qr-scanner">
+      <div class="scanner-viewport">
+        <video id="scanner-video" playsinline></video>
+        <canvas id="scanner-canvas" style="display:none;"></canvas>
+        <div class="scanner-overlay">
+          <div class="scanner-frame"></div>
+        </div>
+      </div>
+      <p class="scanner-hint">Richte die Kamera auf den QR-Code des Baby-Geraets</p>
+    </div>
+    <div class="manual-code-toggle">
+      <button class="btn secondary" id="btn-manual-code">Code manuell eingeben</button>
+    </div>
+  `;
+
+  const video = document.getElementById('scanner-video') as HTMLVideoElement;
+  const canvas = document.getElementById('scanner-canvas') as HTMLCanvasElement;
+
+  startQRScanner(video, canvas, async (data) => {
+    if (cleanupScanner) {
+      cleanupScanner();
+      cleanupScanner = null;
+    }
+
+    // The scanned data is the 8-char alphanumeric room code
+    const code = data.trim().toLowerCase();
+    if (/^[a-z0-9]{8}$/.test(code)) {
+      await doJoin(code);
+    } else {
+      const statusEl = document.getElementById('pair-status');
+      if (statusEl) {
+        statusEl.innerHTML = '<span class="status-error">Ungueltiger QR-Code. Bitte nochmal versuchen.</span>';
+      }
+      // Restart scanner
+      showServerParentUI();
+    }
+  }).then((stopScanner) => {
+    cleanupScanner = stopScanner;
+  }).catch(() => {
+    // Camera not available — fall back to manual input
+    showManualCodeInput();
+  });
+
+  document.getElementById('btn-manual-code')!.addEventListener('click', () => {
+    if (cleanupScanner) {
+      cleanupScanner();
+      cleanupScanner = null;
+    }
+    showManualCodeInput();
+  });
+}
+
+function showManualCodeInput(): void {
+  const main = document.getElementById('pair-main');
+  const instructions = document.getElementById('pair-instructions');
+  if (!main || !instructions) return;
+
+  instructions.textContent = 'Gib den 8-stelligen Code vom Baby-Geraet ein.';
 
   main.innerHTML = `
     <div class="pair-code-input">
       <input
         type="text"
         id="code-input"
-        maxlength="6"
-        pattern="[0-9]*"
-        inputmode="numeric"
-        placeholder="000000"
+        maxlength="8"
+        pattern="[a-z0-9]*"
+        inputmode="text"
+        placeholder="abcd1234"
         autocomplete="off"
       />
       <button class="btn primary" id="btn-join" disabled>Verbinden</button>
@@ -262,18 +344,18 @@ function setupCodeInput(): void {
   const joinBtn = document.getElementById('btn-join') as HTMLButtonElement;
 
   input.addEventListener('input', () => {
-    input.value = input.value.replace(/\D/g, '');
-    joinBtn.disabled = input.value.length !== 6;
+    input.value = input.value.toLowerCase().replace(/[^a-z0-9]/g, '');
+    joinBtn.disabled = input.value.length !== 8;
   });
 
   input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && input.value.length === 6) {
+    if (e.key === 'Enter' && input.value.length === 8) {
       doJoin(input.value);
     }
   });
 
   joinBtn.addEventListener('click', () => {
-    if (input.value.length === 6) {
+    if (input.value.length === 8) {
       doJoin(input.value);
     }
   });

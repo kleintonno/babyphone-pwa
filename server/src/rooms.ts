@@ -20,10 +20,16 @@ const rooms = new Map<string, Room>();
 
 const CODE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
+const CODE_CHARS = 'abcdefghjkmnpqrstuvwxyz23456789'; // no i/l/o/0/1 to avoid confusion
+const CODE_LENGTH = 8;
+
 function generateCode(): string {
   let code: string;
   do {
-    code = Math.floor(100000 + Math.random() * 900000).toString();
+    code = '';
+    for (let i = 0; i < CODE_LENGTH; i++) {
+      code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+    }
   } while (rooms.has(code));
   return code;
 }

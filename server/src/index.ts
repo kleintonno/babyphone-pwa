@@ -6,7 +6,7 @@ import { initializePush, getPublicVapidKey } from './push.js';
 import { handleConnection } from './signaling.js';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
-const CONTACT_EMAIL = process.env.CONTACT_EMAIL || 'admin@bayphone.local';
+const CONTACT_EMAIL = process.env.CONTACT_EMAIL || 'admin@babyphone.local';
 
 // Initialize push notifications
 initializePush(CONTACT_EMAIL);
@@ -45,7 +45,7 @@ wss.on('connection', (ws) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`[Server] BayPhone server running on port ${PORT}`);
+  console.log(`[Server] BabyPhone server running on port ${PORT}`);
   console.log(`[Server] WebSocket endpoint: ws://localhost:${PORT}/ws`);
   console.log(`[Server] VAPID key endpoint: http://localhost:${PORT}/api/vapid-key`);
 });

@@ -22,6 +22,30 @@ function send(ws: WebSocket, data: SignalingMessage): void {
   }
 }
 
+// Rate limiting for join attempts
+const JOIN_MAX_ATTEMPTS = 5;
+const JOIN_WINDOW_MS = 60_000; // 1 minute
+
+interface RateLimitEntry {
+  attempts: number;
+  windowStart: number;
+}
+
+const joinAttempts = new WeakMap<WebSocket, RateLimitEntry>();
+
+function checkJoinRateLimit(ws: WebSocket): boolean {
+  const now = Date.now();
+  let entry = joinAttempts.get(ws);
+
+  if (!entry || now - entry.windowStart > JOIN_WINDOW_MS) {
+    entry = { attempts: 0, windowStart: now };
+    joinAttempts.set(ws, entry);
+  }
+
+  entry.attempts++;
+  return entry.attempts <= JOIN_MAX_ATTEMPTS;
+}
+
 export function handleConnection(ws: WebSocket): void {
   ws.on('message', (raw) => {
     let msg: SignalingMessage;
@@ -76,6 +100,11 @@ function handleCreateRoom(ws: WebSocket, msg: SignalingMessage): void {
 }
 
 function handleJoinRoom(ws: WebSocket, msg: SignalingMessage): void {
+  if (!checkJoinRateLimit(ws)) {
+    send(ws, { type: 'error', message: 'Zu viele Versuche. Bitte warte eine Minute.' });
+    return;
+  }
+
   const code = msg.code as string;
   if (!code) {
     send(ws, { type: 'error', message: 'Missing room code' });
@@ -161,7 +190,7 @@ async function handleNoiseDetected(ws: WebSocket): Promise<void> {
     // Push notification (for when the app is in background)
     if (parent.pushSubscription) {
       const success = await sendPushNotification(parent.pushSubscription, {
-        title: 'BayPhone',
+        title: 'BabyPhone',
         body: `Baby ist wach! (${timeStr})`,
         tag: 'noise-alert',
         url: '/?page=parent',

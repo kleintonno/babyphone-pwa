@@ -1,7 +1,7 @@
 services:
   caddy:
     image: caddy:2-alpine
-    container_name: bayphone-caddy
+    container_name: babyphone-caddy
     restart: unless-stopped
     ports:
       - "80:80"
@@ -10,13 +10,13 @@ services:
     volumes:
       - caddy-data:/data
       - caddy-config:/config
-    command: caddy reverse-proxy --from ${DOMAIN:?Set DOMAIN in .env} --to bayphone:3000
+    command: caddy reverse-proxy --from ${DOMAIN:?Set DOMAIN in .env} --to babyphone:3000
     depends_on:
-      - bayphone
+      - babyphone
 
-  bayphone:
+  babyphone:
     build: .
-    container_name: bayphone
+    container_name: babyphone
     restart: unless-stopped
     expose:
       - "3000"
@@ -29,7 +29,7 @@ services:
 
   coturn:
     image: coturn/coturn:latest
-    container_name: bayphone-coturn
+    container_name: babyphone-coturn
     restart: unless-stopped
     network_mode: host
     command:

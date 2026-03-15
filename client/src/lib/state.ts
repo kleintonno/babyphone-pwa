@@ -23,7 +23,7 @@ export interface AppState {
 
 type Listener = (state: AppState) => void;
 
-const STORAGE_KEY = 'bayphone-state';
+const STORAGE_KEY = 'babyphone-state';
 
 const defaultState: AppState = {
   page: 'home',

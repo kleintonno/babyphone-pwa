@@ -1,7 +1,7 @@
-// BayPhone Service Worker
+// BabyPhone Service Worker
 // Handles push notifications and offline caching
 
-const CACHE_NAME = 'bayphone-v1';
+const CACHE_NAME = 'babyphone-v1';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -70,7 +70,7 @@ self.addEventListener('push', (event) => {
     payload = event.data.json();
   } catch {
     payload = {
-      title: 'BayPhone',
+      title: 'BabyPhone',
       body: event.data.text(),
     };
   }
@@ -79,7 +79,7 @@ self.addEventListener('push', (event) => {
     body: payload.body || 'Baby braucht Aufmerksamkeit',
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
-    tag: payload.tag || 'bayphone-alert',
+    tag: payload.tag || 'babyphone-alert',
     renotify: true,
     requireInteraction: true,
     vibrate: [200, 100, 200, 100, 200],
@@ -99,7 +99,7 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(payload.title || 'BayPhone', options)
+    self.registration.showNotification(payload.title || 'BabyPhone', options)
   );
 });
 

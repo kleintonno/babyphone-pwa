@@ -1,4 +1,4 @@
-# BayPhone
+# BabyPhone
 
 Digitales Babyphone als Progressive Web App. Ein Handy ueberwacht das Baby, das andere empfaengt Push-Benachrichtigungen bei Geraeuschen — im WLAN per Peer-to-Peer, unterwegs ueber den eigenen Server.
 
@@ -39,7 +39,7 @@ server/                 # Signaling + Push Server (Node.js)
     rooms.ts            # In-Memory Pairing-System
     push.ts             # VAPID + Web Push
 
-docker-compose.yml      # Caddy + BayPhone + coturn
+docker-compose.yml      # Caddy + BabyPhone + coturn
 Dockerfile              # Multi-Stage Build
 ```
 
@@ -74,7 +74,7 @@ cp .env.example .env
 `.env` anpassen:
 
 ```env
-DOMAIN=bayphone.deinedomain.de
+DOMAIN=babyphone.deinedomain.de
 CONTACT_EMAIL=deine@email.de
 TURN_SECRET=<openssl rand -hex 32>
 ```

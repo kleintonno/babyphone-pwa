@@ -54,7 +54,7 @@ export async function createBabyOffer(): Promise<{
   peerConnection = new RTCPeerConnection(ICE_CONFIG);
 
   // Create data channel for noise alerts
-  dataChannel = peerConnection.createDataChannel('bayphone', {
+  dataChannel = peerConnection.createDataChannel('babyphone', {
     ordered: true,
   });
 

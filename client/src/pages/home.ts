@@ -13,7 +13,7 @@ export function renderHome(container: HTMLElement): void {
             <path d="M35 36 Q40 40 45 36" fill="none" stroke="currentColor" stroke-width="2"/>
           </svg>
         </div>
-        <h1>BayPhone</h1>
+        <h1>BabyPhone</h1>
         <p class="subtitle">Dein digitales Babyphone</p>
       </div>
 
