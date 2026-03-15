@@ -301,7 +301,7 @@ function showServerParentUI(): void {
 
     // The scanned data is the 8-char alphanumeric room code
     const code = data.trim().toLowerCase();
-    if (/^[a-z0-9]{8}$/.test(code)) {
+    if (/^[a-z0-9]{6,8}$/.test(code)) {
       await doJoin(code);
     } else {
       log('Invalid QR code data:', data);
@@ -336,7 +336,7 @@ function showManualCodeInput(): void {
   if (!main || !instructions) return;
 
   log('showManualCodeInput');
-  instructions.textContent = 'Gib den 8-stelligen Code vom Baby-Geraet ein.';
+  instructions.textContent = 'Gib den Code vom Baby-Geraet ein.';
 
   main.innerHTML = `
     <div class="pair-code-input">
@@ -344,6 +344,7 @@ function showManualCodeInput(): void {
         type="text"
         id="code-input"
         maxlength="8"
+        minlength="6"
         pattern="[a-z0-9]*"
         inputmode="text"
         placeholder="abcd1234"
@@ -362,12 +363,12 @@ function setupCodeInput(): void {
 
   input.addEventListener('input', () => {
     input.value = input.value.toLowerCase().replace(/[^a-z0-9]/g, '');
-    joinBtn.disabled = input.value.length !== 8;
+    joinBtn.disabled = input.value.length < 6 || input.value.length > 8;
     log('Code input:', input.value, 'length:', input.value.length, 'btn disabled:', joinBtn.disabled);
   });
 
   input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && input.value.length === 8) {
+    if (e.key === 'Enter' && input.value.length >= 6 && input.value.length <= 8) {
       log('Enter pressed with code:', input.value);
       doJoin(input.value);
     }
@@ -375,7 +376,7 @@ function setupCodeInput(): void {
 
   joinBtn.addEventListener('click', () => {
     log('Join button clicked, code:', input.value, 'length:', input.value.length);
-    if (input.value.length === 8) {
+    if (input.value.length >= 6 && input.value.length <= 8) {
       doJoin(input.value);
     }
   });

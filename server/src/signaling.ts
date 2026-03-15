@@ -97,7 +97,7 @@ function handleCreateRoom(ws: WebSocket, msg: SignalingMessage): void {
     memberId: member.id,
   });
 
-  console.log(`[Signaling] Room ${room.code} created by baby ${member.id}`);
+  console.log(`[Signaling] Room ${room.code} (length=${room.code.length}) created by baby ${member.id}`);
 }
 
 function handleJoinRoom(ws: WebSocket, msg: SignalingMessage): void {
@@ -107,6 +107,7 @@ function handleJoinRoom(ws: WebSocket, msg: SignalingMessage): void {
   }
 
   const code = msg.code as string;
+  console.log(`[Signaling] Join attempt: code="${code}" (length=${code?.length})`);
   if (!code) {
     send(ws, { type: 'error', message: 'Missing room code' });
     return;
@@ -114,6 +115,7 @@ function handleJoinRoom(ws: WebSocket, msg: SignalingMessage): void {
 
   const room = getRoom(code);
   if (!room) {
+    console.log(`[Signaling] Room not found for code="${code}"`);
     send(ws, { type: 'error', message: 'Room not found' });
     return;
   }
