@@ -212,7 +212,11 @@ function setupSignaling(isBaby: boolean): void {
       case 'error': {
         log('Server error:', msg.message);
         if (statusEl) {
-          statusEl.innerHTML = `<span class="status-error">Fehler: ${msg.message as string}</span>`;
+          statusEl.textContent = '';
+          const span = document.createElement('span');
+          span.className = 'status-error';
+          span.textContent = `Fehler: ${msg.message as string}`;
+          statusEl.appendChild(span);
         }
         break;
       }
@@ -299,7 +303,7 @@ function showServerParentUI(): void {
       cleanupScanner = null;
     }
 
-    // The scanned data is the 8-char alphanumeric room code
+    // The scanned data is the alphanumeric room code (6-8 chars)
     const code = data.trim().toLowerCase();
     if (/^[a-z0-9]{6,8}$/.test(code)) {
       await doJoin(code);

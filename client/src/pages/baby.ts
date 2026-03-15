@@ -174,12 +174,14 @@ function setupMessageHandler(): void {
 function applyRemoteSettings(msg: Record<string, unknown>): void {
   if (typeof msg.noiseThreshold === 'number') {
     setThreshold(msg.noiseThreshold);
+    setState({ noiseThreshold: msg.noiseThreshold });
     const slider = document.getElementById('threshold-slider') as HTMLInputElement | null;
     if (slider) slider.value = String(msg.noiseThreshold);
     updateThresholdLine(msg.noiseThreshold);
   }
   if (typeof msg.noiseHoldMs === 'number') {
     setHoldTime(msg.noiseHoldMs);
+    setState({ noiseHoldMs: msg.noiseHoldMs });
     const slider = document.getElementById('hold-slider') as HTMLInputElement | null;
     const label = document.getElementById('hold-value');
     if (slider) slider.value = String(msg.noiseHoldMs);

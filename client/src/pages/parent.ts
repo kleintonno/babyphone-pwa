@@ -7,6 +7,7 @@ let unsubscribeState: (() => void) | null = null;
 let unsubscribeMsg: (() => void) | null = null;
 let unsubscribeWebRTC: (() => void) | null = null;
 let alertHistory: { timestamp: string; time: string }[] = [];
+let settingsDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function renderParent(container: HTMLElement): void {
   const state = getState();
@@ -126,15 +127,27 @@ function setupEventListeners(): void {
   thresholdSlider.addEventListener('input', () => {
     const value = parseFloat(thresholdSlider.value);
     setState({ noiseThreshold: value });
-    sendSettings({ noiseThreshold: value });
+    debouncedSendSettings({ noiseThreshold: value });
   });
 
   holdSlider.addEventListener('input', () => {
     const ms = parseInt(holdSlider.value, 10);
     setState({ noiseHoldMs: ms });
     holdValue.textContent = ms === 0 ? 'Sofort' : `${(ms / 1000).toFixed(1)}s`;
-    sendSettings({ noiseHoldMs: ms });
+    debouncedSendSettings({ noiseHoldMs: ms });
   });
+}
+
+let pendingSettings: { noiseThreshold?: number; noiseHoldMs?: number } = {};
+
+function debouncedSendSettings(settings: { noiseThreshold?: number; noiseHoldMs?: number }): void {
+  Object.assign(pendingSettings, settings);
+  if (settingsDebounceTimer) clearTimeout(settingsDebounceTimer);
+  settingsDebounceTimer = setTimeout(() => {
+    sendSettings(pendingSettings);
+    pendingSettings = {};
+    settingsDebounceTimer = null;
+  }, 150);
 }
 
 function sendSettings(settings: { noiseThreshold?: number; noiseHoldMs?: number }): void {

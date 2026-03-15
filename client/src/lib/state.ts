@@ -62,7 +62,8 @@ export function setState(partial: Partial<AppState>): void {
 
 export function resetState(): void {
   const threshold = state.noiseThreshold; // preserve threshold preference
-  state = { ...defaultState, noiseThreshold: threshold };
+  const holdMs = state.noiseHoldMs;       // preserve hold time preference
+  state = { ...defaultState, noiseThreshold: threshold, noiseHoldMs: holdMs };
   persistState();
   notifyListeners();
 }
