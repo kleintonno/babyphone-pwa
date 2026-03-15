@@ -21,9 +21,15 @@ let isLanMode = false;
 
 const SERVER_TIMEOUT_MS = 5000;
 
+function log(...args: unknown[]): void {
+  console.log('[Pair]', ...args);
+}
+
 export function renderPair(container: HTMLElement): void {
   const state = getState();
   const isBaby = state.role === 'baby';
+
+  log('renderPair, role:', state.role);
 
   container.innerHTML = `
     <div class="page pair-page">
@@ -45,6 +51,10 @@ export function renderPair(container: HTMLElement): void {
         </div>
 
         <div class="pair-status" id="pair-status"></div>
+
+        <div class="pair-footer" id="pair-footer">
+          <button class="btn secondary" id="btn-lan-fallback">LAN-Modus (ohne Server)</button>
+        </div>
       </div>
     </div>
   `;
@@ -54,6 +64,20 @@ export function renderPair(container: HTMLElement): void {
     setState({ page: 'home', role: null, roomCode: null });
   });
 
+  document.getElementById('btn-lan-fallback')!.addEventListener('click', () => {
+    log('LAN mode button clicked');
+    if (connectionCheckInterval) clearInterval(connectionCheckInterval);
+    connectionCheckInterval = null;
+    if (serverTimeout) clearTimeout(serverTimeout);
+    serverTimeout = null;
+    isLanMode = true;
+    if (isBaby) {
+      showLanBabyUI();
+    } else {
+      showLanParentUI();
+    }
+  });
+
   // Try server first, fallback to LAN
   tryServerMode(isBaby);
 }
@@ -61,6 +85,8 @@ export function renderPair(container: HTMLElement): void {
 // ============ SERVER MODE ============
 
 function tryServerMode(isBaby: boolean): void {
+  log('tryServerMode, isBaby:', isBaby);
+
   // Clean up any previous connection cleanly
   disconnect();
 
@@ -70,96 +96,65 @@ function tryServerMode(isBaby: boolean): void {
   // Now connect
   connect();
 
-  // Timeout: if server doesn't connect in time, offer LAN mode
+  // Timeout: if server doesn't connect in time, show error
   serverTimeout = setTimeout(() => {
     if (!getState().connected) {
-      showModePicker(isBaby);
+      log('Server timeout — not connected after', SERVER_TIMEOUT_MS, 'ms');
+      const instructions = document.getElementById('pair-instructions');
+      const main = document.getElementById('pair-main');
+      if (instructions) instructions.textContent = 'Server nicht erreichbar.';
+      if (main) {
+        main.innerHTML = `
+          <div class="connecting-indicator">
+            <span class="status-error">Server nicht erreichbar. Nutze den LAN-Modus oder versuche es erneut.</span>
+          </div>
+          <button class="btn primary" id="btn-retry-server" style="margin-top:16px;">Nochmal versuchen</button>
+        `;
+        document.getElementById('btn-retry-server')?.addEventListener('click', () => {
+          const mainEl = document.getElementById('pair-main');
+          const instrEl = document.getElementById('pair-instructions');
+          if (mainEl) mainEl.innerHTML = '<div class="connecting-indicator"><div class="spinner"></div><span>Verbinde zum Server...</span></div>';
+          if (instrEl) instrEl.textContent = 'Verbinde zum Server...';
+          tryServerMode(isBaby);
+        });
+      }
     }
   }, SERVER_TIMEOUT_MS);
 
   // Wait for connection, then create/join room
   connectionCheckInterval = setInterval(async () => {
     if (isConnected()) {
+      log('WebSocket connected, clearing interval');
       if (connectionCheckInterval) clearInterval(connectionCheckInterval);
       connectionCheckInterval = null;
       if (serverTimeout) clearTimeout(serverTimeout);
       serverTimeout = null;
 
       if (isBaby) {
+        log('Baby: creating room...');
         const localIp = await getLocalIp();
+        log('Baby: localIp:', localIp);
         createRoom(localIp);
       } else {
+        log('Parent: showing parent UI');
         showServerParentUI();
       }
     }
   }, 200);
 }
 
-function showModePicker(isBaby: boolean): void {
-  if (connectionCheckInterval) clearInterval(connectionCheckInterval);
-  connectionCheckInterval = null;
-
-  const main = document.getElementById('pair-main');
-  const instructions = document.getElementById('pair-instructions');
-  if (!main || !instructions) return;
-
-  instructions.textContent = 'Server nicht erreichbar. Wie moechtest du verbinden?';
-
-  main.innerHTML = `
-    <div class="mode-picker">
-      <button class="role-btn" id="btn-retry-server">
-        <div class="role-icon">
-          <svg viewBox="0 0 24 24" width="32" height="32">
-            <path d="M1 1l22 22M16.72 11.06A10.94 10.94 0 0119 12.55M5 12.55a10.94 10.94 0 015.17-2.39M10.71 5.05A16 16 0 0122.56 9M1.42 9a15.91 15.91 0 014.7-2.88M8.53 16.11a6 6 0 016.95 0M12 20h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <span class="role-title">Nochmal versuchen</span>
-        <span class="role-desc">Server-Verbindung erneut pruefen</span>
-      </button>
-      <button class="role-btn" id="btn-lan-mode">
-        <div class="role-icon">
-          <svg viewBox="0 0 24 24" width="32" height="32">
-            <rect x="3" y="3" width="18" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>
-            <path d="M7 7h3v3H7zM14 7h3v3h-3zM7 14h3v3H7zM14 14h3v3h-3z" fill="currentColor"/>
-          </svg>
-        </div>
-        <span class="role-title">LAN-Modus</span>
-        <span class="role-desc">Direkt per QR-Code verbinden (kein Server noetig)</span>
-      </button>
-    </div>
-  `;
-
-  document.getElementById('btn-retry-server')!.addEventListener('click', () => {
-    main.innerHTML = `
-      <div class="connecting-indicator">
-        <div class="spinner"></div>
-        <span>Verbinde zum Server...</span>
-      </div>
-    `;
-    instructions.textContent = 'Verbinde zum Server...';
-    tryServerMode(isBaby);
-  });
-
-  document.getElementById('btn-lan-mode')!.addEventListener('click', () => {
-    isLanMode = true;
-    if (isBaby) {
-      showLanBabyUI();
-    } else {
-      showLanParentUI();
-    }
-  });
-}
-
 function setupSignaling(isBaby: boolean): void {
   if (cleanupSignaling) cleanupSignaling();
 
   cleanupSignaling = onMessage(async (msg) => {
+    log('Message received:', msg.type, msg);
     const statusEl = document.getElementById('pair-status');
 
     switch (msg.type) {
       case 'room-created': {
         const code = msg.code as string;
         const memberId = msg.memberId as string;
+        log('Room created:', code, 'memberId:', memberId);
         setState({ roomCode: code, memberId });
         await showServerBabyUI(code);
         break;
@@ -168,22 +163,29 @@ function setupSignaling(isBaby: boolean): void {
       case 'room-joined': {
         const memberId = msg.memberId as string;
         const code = msg.code as string;
+        log('Room joined:', code, 'memberId:', memberId);
         setState({ memberId, roomCode: code, paired: true });
 
         if (statusEl) {
-          statusEl.innerHTML = '<span class="status-success">Verbunden!</span>';
+          statusEl.innerHTML = '<span class="status-success">Verbunden! Warte auf Peer...</span>';
         }
 
+        // Subscribe to push notifications (non-blocking)
         if (!isBaby) {
-          const subscription = await subscribePush();
-          if (subscription) {
-            send({ type: 'subscribe-push', subscription: subscription.toJSON() });
-          }
+          subscribePush().then((subscription) => {
+            if (subscription) {
+              log('Push subscribed, sending to server');
+              send({ type: 'subscribe-push', subscription: subscription.toJSON() });
+            }
+          }).catch((err) => {
+            log('Push subscription failed:', err);
+          });
         }
         break;
       }
 
       case 'peer-joined': {
+        log('Peer joined:', msg.peerId, 'role:', msg.peerRole);
         setState({
           paired: true,
           peerLocalIp: msg.peerLocalIp as string | null,
@@ -199,6 +201,7 @@ function setupSignaling(isBaby: boolean): void {
           cleanupWebRTC = initWebRTC();
         }
 
+        log('Navigating to', isBaby ? 'baby' : 'parent', 'page in 1.5s...');
         setTimeout(() => {
           const state = getState();
           setState({ page: state.role === 'baby' ? 'baby' : 'parent' });
@@ -207,13 +210,15 @@ function setupSignaling(isBaby: boolean): void {
       }
 
       case 'error': {
+        log('Server error:', msg.message);
         if (statusEl) {
-          statusEl.innerHTML = `<span class="status-error">${msg.message as string}</span>`;
+          statusEl.innerHTML = `<span class="status-error">Fehler: ${msg.message as string}</span>`;
         }
         break;
       }
 
       case 'push-subscribed': {
+        log('Push subscription confirmed by server');
         setState({ pushEnabled: true });
         break;
       }
@@ -226,7 +231,7 @@ async function showServerBabyUI(code: string): Promise<void> {
   const instructions = document.getElementById('pair-instructions');
   if (!main || !instructions) return;
 
-  instructions.textContent = 'Scanne diesen QR-Code mit dem Eltern-Geraet.';
+  instructions.textContent = 'Scanne diesen QR-Code mit dem Eltern-Geraet oder gib den Code ein.';
 
   // Generate QR code from room code
   try {
@@ -244,7 +249,8 @@ async function showServerBabyUI(code: string): Promise<void> {
       <div class="qr-display">
         <img src="${qrDataUrl}" alt="Pairing QR Code" class="qr-image" />
       </div>
-      <p class="code-hint">Code: ${code}</p>
+      <p class="code-hint">Code: <strong>${code}</strong></p>
+      <p class="code-hint" style="font-size: 12px; opacity: 0.6;">Warte auf Eltern-Geraet...</p>
     `;
   } catch {
     // Fallback: show code as digits if QR generation fails
@@ -254,6 +260,7 @@ async function showServerBabyUI(code: string): Promise<void> {
           ${code.split('').map((d) => `<span class="digit">${d}</span>`).join('')}
         </div>
       </div>
+      <p class="code-hint" style="font-size: 12px; opacity: 0.6;">Warte auf Eltern-Geraet...</p>
     `;
   }
 }
@@ -263,7 +270,8 @@ function showServerParentUI(): void {
   const instructions = document.getElementById('pair-instructions');
   if (!main || !instructions) return;
 
-  instructions.textContent = 'Scanne den QR-Code vom Baby-Geraet.';
+  log('showServerParentUI');
+  instructions.textContent = 'Scanne den QR-Code vom Baby-Geraet oder gib den Code manuell ein.';
 
   main.innerHTML = `
     <div class="qr-scanner">
@@ -285,6 +293,7 @@ function showServerParentUI(): void {
   const canvas = document.getElementById('scanner-canvas') as HTMLCanvasElement;
 
   startQRScanner(video, canvas, async (data) => {
+    log('QR scanned:', data);
     if (cleanupScanner) {
       cleanupScanner();
       cleanupScanner = null;
@@ -295,6 +304,7 @@ function showServerParentUI(): void {
     if (/^[a-z0-9]{8}$/.test(code)) {
       await doJoin(code);
     } else {
+      log('Invalid QR code data:', data);
       const statusEl = document.getElementById('pair-status');
       if (statusEl) {
         statusEl.innerHTML = '<span class="status-error">Ungueltiger QR-Code. Bitte nochmal versuchen.</span>';
@@ -304,12 +314,14 @@ function showServerParentUI(): void {
     }
   }).then((stopScanner) => {
     cleanupScanner = stopScanner;
-  }).catch(() => {
+  }).catch((err) => {
+    log('Camera not available, falling back to manual input:', err);
     // Camera not available — fall back to manual input
     showManualCodeInput();
   });
 
   document.getElementById('btn-manual-code')!.addEventListener('click', () => {
+    log('Manual code input clicked');
     if (cleanupScanner) {
       cleanupScanner();
       cleanupScanner = null;
@@ -323,6 +335,7 @@ function showManualCodeInput(): void {
   const instructions = document.getElementById('pair-instructions');
   if (!main || !instructions) return;
 
+  log('showManualCodeInput');
   instructions.textContent = 'Gib den 8-stelligen Code vom Baby-Geraet ein.';
 
   main.innerHTML = `
@@ -350,15 +363,18 @@ function setupCodeInput(): void {
   input.addEventListener('input', () => {
     input.value = input.value.toLowerCase().replace(/[^a-z0-9]/g, '');
     joinBtn.disabled = input.value.length !== 8;
+    log('Code input:', input.value, 'length:', input.value.length, 'btn disabled:', joinBtn.disabled);
   });
 
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && input.value.length === 8) {
+      log('Enter pressed with code:', input.value);
       doJoin(input.value);
     }
   });
 
   joinBtn.addEventListener('click', () => {
+    log('Join button clicked, code:', input.value, 'length:', input.value.length);
     if (input.value.length === 8) {
       doJoin(input.value);
     }
@@ -368,44 +384,43 @@ function setupCodeInput(): void {
 }
 
 async function doJoin(code: string): Promise<void> {
+  log('doJoin called with code:', code, 'isConnected:', isConnected());
   const statusEl = document.getElementById('pair-status');
 
   // Ensure WebSocket is connected before trying to join
   if (!isConnected()) {
+    log('Not connected, trying to reconnect...');
     if (statusEl) {
-      statusEl.innerHTML = '<span class="status-error">Nicht mit Server verbunden. Bitte warten...</span>';
+      statusEl.innerHTML = '<span class="status-error">Nicht mit Server verbunden. Verbinde...</span>';
     }
-    // Try to reconnect and retry after connection
     connect();
 
-    await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        clearInterval(check);
-        reject(new Error('timeout'));
-      }, 5000);
+    // Wait up to 5s for reconnection
+    let connected = false;
+    for (let i = 0; i < 25; i++) {
+      await new Promise(r => setTimeout(r, 200));
+      if (isConnected()) {
+        connected = true;
+        break;
+      }
+    }
 
-      const check = setInterval(() => {
-        if (isConnected()) {
-          clearInterval(check);
-          clearTimeout(timeout);
-          resolve();
-        }
-      }, 200);
-    }).catch(() => {
+    if (!connected) {
+      log('Failed to reconnect');
       if (statusEl) {
         statusEl.innerHTML = '<span class="status-error">Verbindung fehlgeschlagen. Bitte nochmal versuchen.</span>';
       }
       return;
-    });
-
-    // Check again after waiting
-    if (!isConnected()) return;
+    }
+    log('Reconnected successfully');
   }
 
   if (statusEl) {
     statusEl.innerHTML = '<span class="status-connecting"><div class="spinner"></div> Verbinde...</span>';
   }
+
   const localIp = await getLocalIp();
+  log('Sending join-room, code:', code, 'role: parent, localIp:', localIp);
   joinRoom(code, 'parent', localIp);
 }
 
@@ -419,6 +434,10 @@ async function showLanBabyUI(): Promise<void> {
 
   title.textContent = 'LAN-Modus: Baby';
   instructions.textContent = 'QR-Code wird generiert...';
+
+  // Hide the LAN button since we're already in LAN mode
+  const footer = document.getElementById('pair-footer');
+  if (footer) footer.style.display = 'none';
 
   main.innerHTML = `
     <div class="connecting-indicator">
@@ -440,12 +459,8 @@ async function showLanBabyUI(): Promise<void> {
       <button class="btn secondary" id="btn-scan-answer" style="display:none;">Antwort-QR scannen</button>
     `;
 
-    // After parent scans our QR, they show an answer QR.
-    // Baby needs to scan that answer QR to complete the handshake.
-    // Show the "scan answer" button for baby to proceed
     const scanBtn = document.getElementById('btn-scan-answer')!;
 
-    // Show scan button after a moment (parent needs time to scan + generate answer)
     setTimeout(() => {
       const hint = main.querySelector('.code-hint');
       if (hint) hint.textContent = 'Schritt 2: Scanne den Antwort-QR vom Eltern-Geraet.';
@@ -466,6 +481,10 @@ async function showLanParentUI(): Promise<void> {
   const instructions = document.getElementById('pair-instructions');
   if (title) title.textContent = 'LAN-Modus: Eltern';
   if (instructions) instructions.textContent = 'Scanne den QR-Code vom Baby-Geraet.';
+
+  // Hide the LAN button since we're already in LAN mode
+  const footer = document.getElementById('pair-footer');
+  if (footer) footer.style.display = 'none';
 
   showLanScannerUI('offer');
 }
@@ -502,11 +521,9 @@ function showLanScannerUI(expectedType: 'offer' | 'answer'): void {
 
     try {
       if (expectedType === 'offer') {
-        // Parent scanned baby's offer → generate answer QR
         const answerQrDataUrl = await handleScannedOffer(data);
         showLanAnswerQR(answerQrDataUrl);
       } else {
-        // Baby scanned parent's answer → connection complete
         await handleScannedAnswer(data);
         showLanConnected();
       }
@@ -536,12 +553,10 @@ function showLanAnswerQR(qrDataUrl: string): void {
     <p class="code-hint">Das Baby-Geraet muss diesen Code scannen.</p>
   `;
 
-  // Set up noise alert handler for LAN mode
   setNoiseAlertHandler(() => {
     // Will be handled by parent page
   });
 
-  // Wait for DataChannel to open (connection complete)
   const checkInterval = setInterval(() => {
     const state = getState();
     if (state.peerConnected) {
@@ -578,6 +593,7 @@ function showLanConnected(): void {
 // ============ CLEANUP ============
 
 function cleanup(): void {
+  log('cleanup');
   if (cleanupSignaling) {
     cleanupSignaling();
     cleanupSignaling = null;
@@ -602,6 +618,5 @@ function cleanup(): void {
     closeLanConnection();
     isLanMode = false;
   }
-  // Stop auto-reconnect when leaving pairing page
   disconnect();
 }
